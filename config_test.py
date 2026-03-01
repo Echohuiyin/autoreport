@@ -1,11 +1,11 @@
 """
-Configuration file for the automated weekly report system.
+Test configuration file for the automated weekly report system.
 """
 
 # Email configuration
 EMAIL_CONFIG = {
     'sender_email': 'mingruiliu99@163.com',  # Your 163 email address
-    'sender_password': 'QQheCPvibk9AEFDf',   # Replace with your 163 email authorization code
+    'sender_password': 'test_password',   # Test password
     'smtp_server': 'smtp.163.com',           # 163 SMTP server
     'smtp_port': 465                         # 163 SMTP port for SSL
 }

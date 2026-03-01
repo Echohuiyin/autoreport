@@ -12,8 +12,6 @@ import pandas as pd
 import openpyxl
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from email.mime.base import MIMEBase
-from email import encoders
 from pathlib import Path
 
 # Configure logging
@@ -81,7 +79,23 @@ class WeeklyReportSender:
         wb = openpyxl.load_workbook(file_path, data_only=True)
         ws = wb.active
         
-        # Get the data starting from row 2 (skip title row)
+        # Get merged cells
+        merged_cells = ws.merged_cells.ranges
+        
+        # Create a dictionary to hold merged cell values
+        merged_values = {}
+        for merged_range in merged_cells:
+            # Get the top-left cell value
+            min_col, min_row, max_col, max_row = merged_range.bounds
+            top_left_cell = ws.cell(row=min_row, column=min_col)
+            value = top_left_cell.value
+            
+            # Store value for all cells in the merged range
+            for row in range(min_row, max_row + 1):
+                for col in range(min_col, max_col + 1):
+                    merged_values[(row, col)] = value
+        
+        # Get the data
         data_rows = []
         headers = None
         
@@ -93,8 +107,15 @@ class WeeklyReportSender:
                 # This is the header row
                 headers = [cell if cell is not None else f'Column_{i}' for i, cell in enumerate(row)]
             else:
-                # Data rows
-                data_rows.append(row)
+                # Data rows with merged cell handling
+                processed_row = []
+                for col_idx, cell_value in enumerate(row, 1):
+                    # Check if this cell is part of a merged range
+                    if (row_idx, col_idx) in merged_values:
+                        processed_row.append(merged_values[(row_idx, col_idx)])
+                    else:
+                        processed_row.append(cell_value)
+                data_rows.append(processed_row)
         
         wb.close()
         
@@ -103,6 +124,9 @@ class WeeklyReportSender:
         
         # Create DataFrame
         df = pd.DataFrame(data_rows, columns=headers)
+        
+        # Handle any remaining NaN values
+        df = df.fillna('')
         
         # Handle merged cells by forward-filling the '项目' column
         # This will propagate category names down through empty cells
@@ -153,21 +177,194 @@ class WeeklyReportSender:
         return "\n".join(parsed_content) if parsed_content else "No data found in Excel file."
     
     def read_excel_content(self):
-        """Read and return the content of the Excel file as a formatted string."""
+        """Read and return the content of the Excel file as an HTML string with enhanced formatting, preserving cell styles and merged cells."""
         try:
-            # Read Excel file with merged cell handling
-            df = self.read_excel_with_merged_cells(self.excel_file_path)
+            # Load the workbook with openpyxl to access formatting
+            wb = openpyxl.load_workbook(self.excel_file_path)
+            ws = wb.active
             
-            # Parse the hierarchical structure
-            parsed_content = self.parse_excel_structure(df)
+            # Get merged cell ranges
+            merged_cells = list(ws.merged_cells.ranges)
+            
+            # Create a dictionary to hold merged cell information
+            merged_info = {}
+            for merged_range in merged_cells:
+                min_col, min_row, max_col, max_row = merged_range.bounds
+                merged_info[(min_row, min_col)] = (max_row, max_col)
+            
+            # Define the columns we want to display
+            desired_columns = ['项目', '名称', '进展', '处理人', '状态']
+            
+            # Find column indices for desired columns
+            column_indices = []
+            headers = []
+            
+            # Check row 2 for headers
+            for col in range(1, ws.max_column + 1):
+                cell = ws.cell(row=2, column=col)
+                header_value = cell.value
+                if header_value in desired_columns:
+                    column_indices.append(col)
+                    headers.append(header_value)
+                # Stop once we've found all desired columns
+                if len(headers) == len(desired_columns):
+                    break
+            
+            # If no headers found, use first 5 columns with default headers
+            if not headers:
+                column_indices = list(range(1, min(6, ws.max_column + 1)))
+                headers = desired_columns[:len(column_indices)]
+            
+            # Build HTML table
+            html = ['<table class="excel-table" border="1" cellspacing="0" cellpadding="4">']
+            
+            # Add header row
+            html.append('  <thead>')
+            html.append('    <tr>')
+            for header in headers:
+                html.append(f'      <th>{header}</th>')
+            html.append('    </tr>')
+            html.append('  </thead>')
+            
+            # Add data rows
+            html.append('  <tbody>')
+            
+            # Track merged cells that span multiple rows
+            merged_rows = {}
+            
+            for row_idx in range(3, ws.max_row + 1):  # Start from row 3 (data rows)
+                html.append('    <tr>')
+                col_index = 0
+                
+                while col_index < len(column_indices):
+                    col_idx = column_indices[col_index]
+                    
+                    # Check if this cell is part of a merged range that started in a previous row
+                    skip_cell = False
+                    for (start_row, start_col), (end_row, end_col) in merged_info.items():
+                        if start_row < row_idx <= end_row and start_col <= col_idx <= end_col:
+                            # This cell is part of a merged range from a previous row
+                            skip_cell = True
+                            break
+                    
+                    if skip_cell:
+                        # Move to the next column
+                        col_index += 1
+                        continue
+                    
+                    # Check if this cell is the top-left of a new merged range
+                    if (row_idx, col_idx) in merged_info:
+                        max_row, max_col = merged_info[(row_idx, col_idx)]
+                        rowspan = max_row - row_idx + 1
+                        # Calculate colspan within our desired columns
+                        colspan = 1
+                        # Only count columns that are in our column_indices list
+                        for i in range(col_idx + 1, max_col + 1):
+                            if i in column_indices:
+                                colspan += 1
+                        # Ensure colspan doesn't exceed the number of columns we're displaying
+                        colspan = min(colspan, len(column_indices) - col_index)
+                    else:
+                        rowspan = 1
+                        colspan = 1
+                    
+                    # Get cell value
+                    cell = ws.cell(row=row_idx, column=col_idx)
+                    value = cell.value if cell.value is not None else ''
+                    
+                    # Get cell styling - preserve original formatting
+                    style_attrs = []
+                    
+                    # Background color
+                    if cell.fill and cell.fill.start_color and cell.fill.start_color.rgb:
+                        try:
+                            rgb = cell.fill.start_color.rgb
+                            if rgb and not str(rgb).lower() == 'ff000000':  # Skip black background
+                                style_attrs.append(f'background-color: #{rgb[2:]}')
+                        except:
+                            pass
+                    
+                    # Font color
+                    if cell.font.color:
+                        try:
+                            rgb = cell.font.color.rgb
+                            if rgb:
+                                style_attrs.append(f'color: #{rgb[2:]}')
+                        except:
+                            pass
+                    
+                    # Font size
+                    if cell.font.size:
+                        style_attrs.append(f'font-size: {cell.font.size}pt')
+                    
+                    # Font weight
+                    if cell.font.bold:
+                        style_attrs.append('font-weight: bold')
+                    
+                    # Font style
+                    if cell.font.italic:
+                        style_attrs.append('font-style: italic')
+                    
+                    # Alignment
+                    if cell.alignment:
+                        if cell.alignment.horizontal:
+                            style_attrs.append(f'text-align: {cell.alignment.horizontal}')
+                        if cell.alignment.vertical:
+                            style_attrs.append(f'vertical-align: {cell.alignment.vertical}')
+                    
+                    # Build style attribute
+                    style_str = '; '.join(style_attrs)
+                    style_html = f' style="{style_str}"'
+                    
+                    # Build cell HTML
+                    if rowspan > 1 or colspan > 1:
+                        html.append(f'      <td{style_html} rowspan="{rowspan}" colspan="{colspan}">{value}</td>')
+                    else:
+                        html.append(f'      <td{style_html}>{value}</td>')
+                    
+                    # Move to the next column after the merged range
+                    col_index += colspan
+                html.append('    </tr>')
+            html.append('  </tbody>')
+            html.append('</table>')
+            
+            # Add CSS styling
+            style = """
+            <style>
+                .excel-table {
+                    border-collapse: collapse;
+                    width: 100%;
+                    font-family: Arial, sans-serif;
+                    font-size: 12px;
+                    margin: 0 auto;
+                }
+                .excel-table th, .excel-table td {
+                    border: 1px solid #ddd;
+                    padding: 8px;
+                    text-align: left;
+                }
+                .excel-table th {
+                    background-color: #f2f2f2;
+                    font-weight: bold;
+                    text-align: center;
+                }
+                .excel-table tr:nth-child(even) {
+                    background-color: #f9f9f9;
+                }
+                .excel-table tr:hover {
+                    background-color: #f5f5f5;
+                }
+            </style>
+            """
+            
+            html_content = style + '\n'.join(html)
             
             # Log summary information
-            logger.info(f"Successfully processed Excel file: {len(df)} rows processed")
-            if len(df) > 0:
-                categories = df['项目'].dropna().unique() if '项目' in df.columns else []
-                logger.info(f"Categories found: {list(categories)}")
+            logger.info(f"Successfully processed Excel file: {ws.max_row - 2} rows processed")
+            logger.info(f"Found {len(merged_cells)} merged cell ranges")
+            logger.info(f"Using {len(column_indices)} columns: {headers}")
             
-            return parsed_content
+            return html_content
             
         except Exception as e:
             logger.error(f"Error reading Excel file: {str(e)}")
@@ -175,33 +372,30 @@ class WeeklyReportSender:
     
     def create_email_message(self, excel_content):
         """Create the email message with formatted Excel content in the body."""
-        msg = MIMEMultipart()
+        msg = MIMEMultipart('alternative')
         msg['From'] = self.sender_email
         msg['To'] = ', '.join(self.to_emails)
         msg['Cc'] = ', '.join(self.cc_emails) if self.cc_emails else ''
         msg['Subject'] = self.subject
         
-        # Email body with parsed content
-        body = self.body_template + f"\n\n---\n## Weekly Report Content:\n\n{excel_content}"
-        msg.attach(MIMEText(body, 'plain'))
+        # Convert plain text template to HTML
+        html_template = self.body_template.replace('\n', '<br>')
         
-        # Remove attachment functionality as per requirement
-        # Original attachment code commented out
-        # try:
-        #     with open(self.excel_file_path, "rb") as attachment:
-        #         part = MIMEBase('application', 'octet-stream')
-        #         part.set_payload(attachment.read())
-        #     
-        #     encoders.encode_base64(part)
-        #     part.add_header(
-        #         'Content-Disposition',
-        #         f'attachment; filename= {os.path.basename(self.excel_file_path)}'
-        #     )
-        #     msg.attach(part)
-        #     
-        # except Exception as e:
-        #     logger.error(f"Error attaching Excel file: {str(e)}")
-        #     raise
+        # Email body with HTML content
+        html_body = f"""
+        <html>
+          <head></head>
+          <body>
+            <p>{html_template}</p>
+            <hr>
+            <h2>Weekly Report Content:</h2>
+            {excel_content}
+          </body>
+        </html>
+        """
+        
+        # Attach HTML part
+        msg.attach(MIMEText(html_body, 'html'))
         
         return msg
     

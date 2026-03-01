@@ -12,7 +12,7 @@ import sys
 def test_excel_with_merged_cells():
     """Test reading Excel file with proper merged cell handling."""
     # Check for both possible filenames (with and without typo)
-    possible_filenames = ['weekly report.xlsx', 'weekyly report.xlsx']
+    possible_filenames = ['weekly_report.xlsx', 'weekyly_report.xlsx', 'weekly report.xlsx', 'weekyly report.xlsx']
     excel_file = None
     
     for filename in possible_filenames:
@@ -75,7 +75,7 @@ def test_excel_with_merged_cells():
 
 def test_simple_pandas():
     """Test simple pandas reading for comparison."""
-    possible_filenames = ['weekly report.xlsx', 'weekyly report.xlsx']
+    possible_filenames = ['weekly_report.xlsx', 'weekyly_report.xlsx', 'weekly report.xlsx', 'weekyly report.xlsx']
     excel_file = None
     
     for filename in possible_filenames:
@@ -98,5 +98,8 @@ def test_simple_pandas():
 
 if __name__ == "__main__":
     print("Testing Excel file with merged cells support...")
+    print(f"Current directory: {os.getcwd()}")
+    print(f"Files in directory: {os.listdir('.')}")
     success = test_excel_with_merged_cells()
+    print(f"Test result: {'SUCCESS' if success else 'FAILED'}")
     sys.exit(0 if success else 1)
