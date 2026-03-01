@@ -1,11 +1,14 @@
 # Automated Weekly Report System
 
-This system automatically reads an Excel file (`weekyly report.xlsx`) and sends it via email to configured recipients.
+This system automatically reads an Excel file (`weekly_report.xlsx`) and sends it via email to configured recipients, with the Excel content embedded in the email body while preserving formatting.
 
 ## Features
 
-- Reads Excel files using pandas
-- Sends emails with attachments via SMTP
+- Reads Excel files using pandas and openpyxl
+- Embeds Excel content in email body with preserved formatting
+- Preserves background fill colors, font colors, and font sizes
+- Handles merged cells correctly
+- Sends emails via SMTP
 - Configurable sender, recipients, and email content
 - Comprehensive logging and error handling
 - Supports both primary recipients and CC recipients
@@ -43,12 +46,12 @@ RECIPIENTS_CONFIG = {
 
 # File configuration
 FILE_CONFIG = {
-    'excel_file_path': 'weekyly report.xlsx',
+    'excel_file_path': 'weekly_report.xlsx',
     'subject': 'Weekly Report',
     'body_template': '''
 Dear Team,
 
-Please find attached the weekly report.
+Please find the weekly report below.
 
 Best regards,
 Automated Report System
@@ -64,7 +67,14 @@ Automated Report System
 
 ### 3. Prepare Your Excel File
 
-Ensure your Excel file is named `weekyly report.xlsx` and placed in the same directory as the script.
+Ensure your Excel file is named `weekly_report.xlsx` and placed in the same directory as the script.
+
+The system will automatically detect and preserve the following formatting from your Excel file:
+- Background fill colors
+- Font colors
+- Font sizes
+- Merged cells
+- Text alignment
 
 ## Usage
 
@@ -76,10 +86,11 @@ python weekly_report_sender.py
 
 The system will:
 1. Validate your configuration
-2. Read the Excel file content
-3. Create an email with the file attached
-4. Send the email to all configured recipients
-5. Log all activities to both console and `weekly_report.log`
+2. Read the Excel file content with formatting
+3. Convert the Excel content to HTML while preserving formatting
+4. Create an email with the Excel content embedded in the body
+5. Send the email to all configured recipients
+6. Log all activities to both console and `weekly_report.log`
 
 ## Logging
 
