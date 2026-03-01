@@ -192,10 +192,7 @@ class WeeklyReportSender:
                 min_col, min_row, max_col, max_row = merged_range.bounds
                 merged_info[(min_row, min_col)] = (max_row, max_col)
             
-            # Define the columns we want to display
-            desired_columns = ['项目', '名称', '进展', '处理人', '状态']
-            
-            # Find column indices for desired columns
+            # Read all columns from the Excel file
             column_indices = []
             headers = []
             
@@ -203,17 +200,14 @@ class WeeklyReportSender:
             for col in range(1, ws.max_column + 1):
                 cell = ws.cell(row=2, column=col)
                 header_value = cell.value
-                if header_value in desired_columns:
+                if header_value:
                     column_indices.append(col)
                     headers.append(header_value)
-                # Stop once we've found all desired columns
-                if len(headers) == len(desired_columns):
-                    break
             
-            # If no headers found, use first 5 columns with default headers
+            # If no headers found, use default headers
             if not headers:
                 column_indices = list(range(1, min(6, ws.max_column + 1)))
-                headers = desired_columns[:len(column_indices)]
+                headers = ['项目', '名称', '进展', '处理人', '状态'][:len(column_indices)]
             
             # Build HTML table
             html = ['<table class="excel-table" border="1" cellspacing="0" cellpadding="4">']
