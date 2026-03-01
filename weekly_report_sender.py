@@ -179,8 +179,8 @@ class WeeklyReportSender:
     def read_excel_content(self):
         """Read and return the content of the Excel file as an HTML string with enhanced formatting, preserving cell styles and merged cells."""
         try:
-            # Load the workbook with openpyxl to access formatting
-            wb = openpyxl.load_workbook(self.excel_file_path)
+            # Load the workbook with openpyxl to access formatting (data_only=False to preserve formatting)
+            wb = openpyxl.load_workbook(self.excel_file_path, data_only=False)
             ws = wb.active
             
             # Get merged cell ranges
@@ -218,8 +218,15 @@ class WeeklyReportSender:
             # Build HTML table
             html = ['<table class="excel-table" border="1" cellspacing="0" cellpadding="4">']
             
-            # Add header row
+            # Add title row (周报)
+            title_cell = ws.cell(row=1, column=1)
+            title_value = title_cell.value if title_cell.value is not None else '周报'
             html.append('  <thead>')
+            html.append('    <tr>')
+            html.append(f'      <th colspan="{len(headers)}" style="text-align: center; font-weight: bold; font-size: 14pt;">{title_value}</th>')
+            html.append('    </tr>')
+            
+            # Add header row
             html.append('    <tr>')
             for header in headers:
                 html.append(f'      <th>{header}</th>')
@@ -272,30 +279,59 @@ class WeeklyReportSender:
                     cell = ws.cell(row=row_idx, column=col_idx)
                     value = cell.value if cell.value is not None else ''
                     
-                    # Get cell styling - preserve original formatting
+                    # Get cell styling - preserve original formatting from Excel
                     style_attrs = []
                     
                     # Background color
-                    if cell.fill and cell.fill.start_color and cell.fill.start_color.rgb:
-                        try:
-                            rgb = cell.fill.start_color.rgb
-                            if rgb and not str(rgb).lower() == 'ff000000':  # Skip black background
-                                style_attrs.append(f'background-color: #{rgb[2:]}')
-                        except:
-                            pass
+                    try:
+                        # Check if cell has fill
+                        if cell.fill and cell.fill.start_color:
+                            # Get RGB value
+                            fill_color = cell.fill.start_color
+                            if fill_color and hasattr(fill_color, 'rgb'):
+                                # Check if rgb is a string
+                                if isinstance(fill_color.rgb, str):
+                                    rgb_str = fill_color.rgb
+                                    # Extract RGB part (remove alpha channel if present)
+                                    if len(rgb_str) == 8:
+                                        hex_color = '#' + rgb_str[2:]
+                                    else:
+                                        hex_color = '#' + rgb_str
+                                    # Only set background color if it's not black (for readability)
+                                    if hex_color != '#000000':
+                                        style_attrs.append(f'background-color: {hex_color}')
+                    except Exception as e:
+                        logger.debug(f"Error processing background color: {e}")
                     
                     # Font color
-                    if cell.font.color:
-                        try:
-                            rgb = cell.font.color.rgb
-                            if rgb:
-                                style_attrs.append(f'color: #{rgb[2:]}')
-                        except:
-                            pass
+                    try:
+                        # Check if cell has font color
+                        if cell.font.color:
+                            font_color = cell.font.color
+                            if font_color:
+                                # Handle theme-based colors
+                                if hasattr(font_color, 'theme') and font_color.theme is not None:
+                                    # For theme-based colors, use default black (theme 1 is usually black)
+                                    if font_color.theme == 1:
+                                        style_attrs.append('color: #000000')
+                                # Handle direct RGB colors
+                                elif hasattr(font_color, 'rgb') and font_color.rgb:
+                                    rgb_str = str(font_color.rgb)
+                                    # Extract RGB part (remove alpha channel if present)
+                                    if len(rgb_str) == 8:
+                                        hex_color = '#' + rgb_str[2:]
+                                    else:
+                                        hex_color = '#' + rgb_str
+                                    style_attrs.append(f'color: {hex_color}')
+                    except Exception as e:
+                        logger.debug(f"Error processing font color: {e}")
                     
                     # Font size
                     if cell.font.size:
-                        style_attrs.append(f'font-size: {cell.font.size}pt')
+                        try:
+                            style_attrs.append(f'font-size: {cell.font.size}pt')
+                        except Exception as e:
+                            logger.debug(f"Error processing font size: {e}")
                     
                     # Font weight
                     if cell.font.bold:
