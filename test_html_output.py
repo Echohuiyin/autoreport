@@ -1,60 +1,47 @@
 #!/usr/bin/env python3
 """
-Test script to generate HTML output and save it to a file for inspection.
+Test script to generate HTML output and display it.
 """
 
-import os
-import sys
-import config_test as config
 from weekly_report_sender import WeeklyReportSender
+import logging
 
-class TestWeeklyReportSender(WeeklyReportSender):
-    """Test version that generates HTML output."""
-    def __init__(self):
-        # Override to use test config
-        self.sender_email = config.EMAIL_CONFIG['sender_email']
-        self.sender_password = config.EMAIL_CONFIG['sender_password']
-        self.smtp_server = config.EMAIL_CONFIG['smtp_server']
-        self.smtp_port = config.EMAIL_CONFIG['smtp_port']
-        self.to_emails = config.RECIPIENTS_CONFIG['to_emails']
-        self.cc_emails = config.RECIPIENTS_CONFIG['cc_emails']
-        self.excel_file_path = config.FILE_CONFIG['excel_file_path']
-        self.subject = config.FILE_CONFIG['subject']
-        self.body_template = config.FILE_CONFIG['body_template']
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
-def main():
-    """Generate HTML output and save to file."""
+def test_html_generation():
+    """
+    Test HTML generation with the current Excel file.
+    """
     try:
-        print("Generating HTML output...")
+        # Create report sender instance
+        sender = WeeklyReportSender()
         
-        # Create test sender
-        sender = TestWeeklyReportSender()
-        
-        # Validate configuration
-        sender.validate_config()
-        print("Configuration validated successfully")
-        
-        # Read and parse Excel content
-        print("Reading Excel file...")
-        excel_content = sender.read_excel_content()
-        print("Excel content processed successfully")
+        # Read Excel content and generate HTML
+        html_content = sender.read_excel_content()
         
         # Save HTML to file
         with open('email_body.html', 'w', encoding='utf-8') as f:
-            f.write(excel_content)
-        print("HTML output saved to email_body.html")
+            f.write(html_content)
         
-        # Print some debug info
-        print("\nDebug information:")
-        print(f"HTML length: {len(excel_content)} characters")
-        print("First 500 characters of HTML:")
-        print(excel_content[:500] + "...")
+        logger.info("Excel content processed successfully")
+        logger.info(f"HTML output saved to email_body.html")
         
+        # Print debug information
+        logger.info("\nDebug information:")
+        logger.info(f"HTML length: {len(html_content)} characters")
+        logger.info(f"First 500 characters of HTML:\n{html_content[:500]}...")
+        
+        # Check for specific columns
+        if '备注' in html_content:
+            logger.info("✓ '备注' column found in HTML")
+        else:
+            logger.warning("✗ '备注' column not found in HTML")
+            
     except Exception as e:
-        print(f"Error: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        sys.exit(1)
+        logger.error(f"Error processing Excel file: {e}")
 
 if __name__ == "__main__":
-    main()
+    print("Generating HTML output...")
+    test_html_generation()
