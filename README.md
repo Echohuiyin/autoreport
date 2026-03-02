@@ -45,18 +45,18 @@ Required packages:
 
 ### 2. Configure Email Settings
 
-#### Option 1: Using Environment Variables (Recommended)
+#### Using Environment Variables (Recommended)
 
-Create a `.env` file in the project root:
+The system now exclusively uses environment variables for configuration. Create a `.env` file in the project root:
 
 ```
 # Email configuration
-SENDER_EMAIL=your_email@gmail.com
-SENDER_PASSWORD=your_app_password
-SMTP_SERVER=smtp.gmail.com
-SMTP_PORT=587
+SENDER_EMAIL=your_email@163.com
+SENDER_PASSWORD=your_email_password
+SMTP_SERVER=smtp.163.com
+SMTP_PORT=465
 
-# Recipients
+# Recipients configuration
 TO_EMAILS=recipient1@example.com,recipient2@example.com
 CC_EMAILS=cc1@example.com,cc2@example.com
 
@@ -65,46 +65,62 @@ EXCEL_FILE_PATH=weekly_report.xlsx
 EMAIL_SUBJECT=Weekly Report
 ```
 
-#### Option 2: Using config.py File
+**Environment Variable Details:**
 
-Edit the `config.py` file to set up your email configuration:
+| Variable Name | Required | Description | Default Value |
+|---------------|----------|-------------|---------------|
+| `SENDER_EMAIL` | Yes | Your email address | None |
+| `SENDER_PASSWORD` | Yes | Your email password or app password | None |
+| `SMTP_SERVER` | No | SMTP server address | smtp.163.com |
+| `SMTP_PORT` | No | SMTP server port | 465 |
+| `TO_EMAILS` | Yes | Comma-separated list of primary recipients | None |
+| `CC_EMAILS` | No | Comma-separated list of CC recipients | Empty list |
+| `EXCEL_FILE_PATH` | No | Path to the Excel file | weekly_report.xlsx |
+| `EMAIL_SUBJECT` | No | Email subject line | Weekly Report |
+| `EMAIL_BODY_TEMPLATE` | No | Custom email body template | Default template |
 
-```python
-# Email configuration
-EMAIL_CONFIG = {
-    'sender_email': 'your_email@gmail.com',     # Your Gmail address
-    'sender_password': 'your_app_password',     # Gmail App Password (not regular password)
-    'smtp_server': 'smtp.gmail.com',           # Gmail SMTP server
-    'smtp_port': 587                           # Gmail TLS port
-}
+**Setting Environment Variables Manually:**
 
-# Recipients configuration
-RECIPIENTS_CONFIG = {
-    'to_emails': ['recipient1@example.com', 'recipient2@example.com'],
-    'cc_emails': ['cc1@example.com', 'cc2@example.com']
-}
+If you prefer not to use a `.env` file, you can set environment variables directly:
 
-# File configuration
-FILE_CONFIG = {
-    'excel_file_path': 'weekly_report.xlsx',
-    'subject': 'Weekly Report',
-    'body_template': '''
-Dear Team,
+- **Windows Command Prompt:**
+  ```cmd
+  set SENDER_EMAIL=your_email@163.com
+  set SENDER_PASSWORD=your_password
+  set TO_EMAILS=recipient@example.com
+  python src/weekly_report_sender.py
+  ```
 
-Please find the weekly report below.
+- **Windows PowerShell:**
+  ```powershell
+  $env:SENDER_EMAIL = "your_email@163.com"
+  $env:SENDER_PASSWORD = "your_password"
+  $env:TO_EMAILS = "recipient@example.com"
+  python src/weekly_report_sender.py
+  ```
 
-Best regards,
-Automated Report System
-'''
-}
-```
+- **Linux/Mac Terminal:**
+  ```bash
+  export SENDER_EMAIL=your_email@163.com
+  export SENDER_PASSWORD=your_password
+  export TO_EMAILS=recipient@example.com
+  python src/weekly_report_sender.py
+  ```
+
+**Email Provider Configuration:**
+
+| Provider | SMTP Server | Port | Notes |
+|----------|-------------|------|-------|
+| 163.com | smtp.163.com | 465 | Use SSL |
+| Gmail | smtp.gmail.com | 587 | Use TLS, requires App Password |
+| Outlook | smtp-mail.outlook.com | 587 | Use TLS |
+| Yahoo | smtp.mail.yahoo.com | 587 | Use TLS, requires App Password |
 
 **Important Notes:**
-- For Gmail, you need to use an [App Password](https://support.google.com/accounts/answer/185833) instead of your regular password
-- For other email providers, update the SMTP server and port accordingly:
-  - Outlook/Hotmail: `smtp-mail.outlook.com`, port 587
-  - Yahoo: `smtp.mail.yahoo.com`, port 587
-  - 163.com: `smtp.163.com`, port 465 (SSL)
+- For Gmail and Yahoo, you need to use an [App Password](https://support.google.com/accounts/answer/185833) instead of your regular password
+- For 163.com, use port 465 with SSL
+- Never commit your `.env` file to version control
+- The `.env` file takes precedence over manually set environment variables
 
 ### 3. Prepare Your Excel File
 
