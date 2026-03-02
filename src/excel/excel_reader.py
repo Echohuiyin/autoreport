@@ -1,18 +1,40 @@
 #!/usr/bin/env python3
 """
 Excel reader module for the weekly report system.
-Handles reading Excel files and converting them to HTML with formatting preserved.
+Handles reading Excel files and extracting data with formatting.
 """
 
 import logging
 import openpyxl
+from src.exceptions import ExcelParsingError
+from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
 
+@dataclass
+class Cell:
+    """Represents a cell with its value and formatting."""
+    value: str
+    rowspan: int = 1
+    colspan: int = 1
+    style: dict = None
+
+@dataclass
+class Row:
+    """Represents a row of cells."""
+    cells: list[Cell]
+
+@dataclass
+class ExcelData:
+    """Represents the extracted Excel data."""
+    title: str
+    headers: list[str]
+    rows: list[Row]
+
 class ExcelReader:
-    """Handles reading Excel files and converting them to HTML."""
+    """Handles reading Excel files and extracting data with formatting."""
     
-    def __init__(self, file_path):
+    def __init__(self, file_path: str):
         self.file_path = file_path
     
     def read_excel_with_merged_cells(self):
@@ -66,7 +88,7 @@ class ExcelReader:
             wb.close()
             
             if headers is None:
-                raise ValueError("Could not find header row in Excel file")
+                raise ExcelParsingError("Could not find header row in Excel file")
             
             # Handle merged cells by forward-filling the '项目' column
             # This will propagate category names down through empty cells
@@ -96,10 +118,10 @@ class ExcelReader:
             logger.error(f"Error reading Excel file: {str(e)}")
             raise
     
-    def read_excel_content(self):
+    def read_excel_content(self) -> ExcelData:
         """
-        Read and return the content of the Excel file as an HTML string with enhanced formatting,
-        preserving cell styles and merged cells.
+        Read and return the content of the Excel file as a structured data model
+        with formatting preserved.
         """
         try:
             # Load the workbook with openpyxl to access formatting (data_only=False to preserve formatting)
@@ -132,32 +154,15 @@ class ExcelReader:
                 column_indices = list(range(1, min(6, ws.max_column + 1)))
                 headers = ['项目', '名称', '进展', '处理人', '状态'][:len(column_indices)]
             
-            # Build HTML table
-            html = ['<table class="excel-table" border="1" cellspacing="0" cellpadding="4">']
-            
-            # Add title row (周报)
+            # Get title
             title_cell = ws.cell(row=1, column=1)
-            title_value = title_cell.value if title_cell.value is not None else '周报'
-            html.append('  <thead>')
-            html.append('    <tr>')
-            html.append(f'      <th colspan="{len(headers)}" style="text-align: center; font-weight: bold; font-size: 14pt;">{title_value}</th>')
-            html.append('    </tr>')
+            title = title_cell.value if title_cell.value is not None else '周报'
             
-            # Add header row
-            html.append('    <tr>')
-            for header in headers:
-                html.append(f'      <th>{header}</th>')
-            html.append('    </tr>')
-            html.append('  </thead>')
-            
-            # Add data rows
-            html.append('  <tbody>')
-            
-            # Track merged cells that span multiple rows
-            merged_rows = {}
+            # Process data rows
+            rows = []
             
             for row_idx in range(3, ws.max_row + 1):  # Start from row 3 (data rows)
-                html.append('    <tr>')
+                cells = []
                 col_index = 0
                 
                 while col_index < len(column_indices):
@@ -197,7 +202,7 @@ class ExcelReader:
                     value = cell.value if cell.value is not None else ''
                     
                     # Get cell styling - preserve original formatting from Excel
-                    style_attrs = []
+                    style = {}
                     
                     # Background color
                     try:
@@ -216,7 +221,7 @@ class ExcelReader:
                                         hex_color = '#' + rgb_str
                                     # Only set background color if it's not black (for readability)
                                     if hex_color != '#000000':
-                                        style_attrs.append(f'background-color: {hex_color}')
+                                        style['background-color'] = hex_color
                     except Exception as e:
                         logger.debug(f"Error processing background color: {e}")
                     
@@ -230,7 +235,7 @@ class ExcelReader:
                                 if hasattr(font_color, 'theme') and font_color.theme is not None:
                                     # For theme-based colors, use default black (theme 1 is usually black)
                                     if font_color.theme == 1:
-                                        style_attrs.append('color: #000000')
+                                        style['color'] = '#000000'
                                 # Handle direct RGB colors
                                 elif hasattr(font_color, 'rgb') and font_color.rgb:
                                     rgb_str = str(font_color.rgb)
@@ -239,85 +244,54 @@ class ExcelReader:
                                         hex_color = '#' + rgb_str[2:]
                                     else:
                                         hex_color = '#' + rgb_str
-                                    style_attrs.append(f'color: {hex_color}')
+                                    style['color'] = hex_color
                     except Exception as e:
                         logger.debug(f"Error processing font color: {e}")
                     
                     # Font size
                     if cell.font.size:
                         try:
-                            style_attrs.append(f'font-size: {cell.font.size}pt')
+                            style['font-size'] = f'{cell.font.size}pt'
                         except Exception as e:
                             logger.debug(f"Error processing font size: {e}")
                     
                     # Font weight
                     if cell.font.bold:
-                        style_attrs.append('font-weight: bold')
+                        style['font-weight'] = 'bold'
                     
                     # Font style
                     if cell.font.italic:
-                        style_attrs.append('font-style: italic')
+                        style['font-style'] = 'italic'
                     
                     # Alignment
                     if cell.alignment:
                         if cell.alignment.horizontal:
-                            style_attrs.append(f'text-align: {cell.alignment.horizontal}')
+                            style['text-align'] = cell.alignment.horizontal
                         if cell.alignment.vertical:
-                            style_attrs.append(f'vertical-align: {cell.alignment.vertical}')
+                            style['vertical-align'] = cell.alignment.vertical
                     
-                    # Build style attribute
-                    style_str = '; '.join(style_attrs)
-                    style_html = f' style="{style_str}"'
-                    
-                    # Build cell HTML
-                    if rowspan > 1 or colspan > 1:
-                        html.append(f'      <td{style_html} rowspan="{rowspan}" colspan="{colspan}">{value}</td>')
-                    else:
-                        html.append(f'      <td{style_html}>{value}</td>')
+                    # Create cell object
+                    cell_obj = Cell(value=str(value), rowspan=rowspan, colspan=colspan, style=style)
+                    cells.append(cell_obj)
                     
                     # Move to the next column after the merged range
                     col_index += colspan
-                html.append('    </tr>')
-            html.append('  </tbody>')
-            html.append('</table>')
+                
+                # Create row object
+                row_obj = Row(cells=cells)
+                rows.append(row_obj)
             
-            # Add CSS styling
-            style = """
-            <style>
-                .excel-table {
-                    border-collapse: collapse;
-                    width: 100%;
-                    font-family: Arial, sans-serif;
-                    font-size: 12px;
-                    margin: 0 auto;
-                }
-                .excel-table th, .excel-table td {
-                    border: 1px solid #ddd;
-                    padding: 8px;
-                    text-align: left;
-                }
-                .excel-table th {
-                    background-color: #f2f2f2;
-                    font-weight: bold;
-                    text-align: center;
-                }
-                .excel-table tr:nth-child(even) {
-                    background-color: #f9f9f9;
-                }
-                .excel-table tr:hover {
-                    background-color: #f5f5f5;
-                }
-            </style>
-            """
+            wb.close()
             
-            html_content = style + '\n'.join(html)
+            # Create ExcelData object
+            excel_data = ExcelData(title=title, headers=headers, rows=rows)
             
             # Log summary information
-            logger.info(f"Successfully processed Excel file: {ws.max_row - 2} rows processed")
+            logger.info(f"Successfully processed Excel file: {len(rows)} rows processed")
             logger.info(f"Found {len(merged_cells)} merged cell ranges")
-            logger.info(f"Using {len(column_indices)} columns: {headers}")
+            logger.info(f"Using {len(headers)} columns: {headers}")
             
-            return html_content
+            return excel_data
             
         except Exception as e:
             logger.error(f"Error reading Excel file: {str(e)}")

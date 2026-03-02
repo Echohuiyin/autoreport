@@ -8,13 +8,14 @@ import logging
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from src.exceptions import EmailDeliveryError
 
 logger = logging.getLogger(__name__)
 
 class EmailSender:
     """Handles sending emails with Excel content."""
     
-    def __init__(self, email_config, recipients_config):
+    def __init__(self, email_config: dict, recipients_config: dict):
         self.sender_email = email_config['sender_email']
         self.sender_password = email_config['sender_password']
         self.smtp_server = email_config['smtp_server']
@@ -22,7 +23,7 @@ class EmailSender:
         self.to_emails = recipients_config['to_emails']
         self.cc_emails = recipients_config['cc_emails']
     
-    def create_email_message(self, subject, html_content):
+    def create_email_message(self, subject: str, html_content: str) -> MIMEMultipart:
         """
         Create the email message with formatted Excel content in the body.
         
@@ -49,7 +50,7 @@ class EmailSender:
             logger.error(f"Error creating email message: {str(e)}")
             raise
     
-    def send_email(self, msg):
+    def send_email(self, msg: MIMEMultipart) -> bool:
         """
         Send the email using SMTP.
         
@@ -88,10 +89,10 @@ class EmailSender:
             
         except smtplib.SMTPAuthenticationError:
             logger.error("SMTP authentication failed. Please check your email and password.")
-            raise
+            raise EmailDeliveryError("SMTP authentication failed. Please check your email and password.")
         except smtplib.SMTPException as e:
             logger.error(f"SMTP error occurred: {str(e)}")
-            raise
+            raise EmailDeliveryError(f"SMTP error occurred: {str(e)}")
         except Exception as e:
             logger.error(f"Unexpected error while sending email: {str(e)}")
-            raise
+            raise EmailDeliveryError(f"Unexpected error while sending email: {str(e)}")
